@@ -1,0 +1,74 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+:root, [data-theme="dark"] {
+  --bg: #08080d;
+  --bg-dot: #13131f;
+  --surface: #101018;
+  --surface-up: #16161f;
+  --border: #1f1f30;
+  --border-hi: #2d2d44;
+  --text: #ddddef;
+  --text-dim: #6e6e8a;
+  --text-faint: #3e3e56;
+  --accent: #818cf8;
+  --accent-g: rgba(129,140,248,0.12);
+  --fact: #c084fc;
+  --fact-bg: rgba(192,132,252,0.05);
+  --fact-bdr: rgba(192,132,252,0.2);
+  --dim: #60a5fa;
+  --dim-bg: rgba(96,165,250,0.04);
+  --dim-bdr: rgba(96,165,250,0.18);
+  --snow: #34d399;
+  --snow-bg: rgba(52,211,153,0.04);
+  --snow-bdr: rgba(52,211,153,0.18);
+  --pk: #fbbf24;
+  --pk-bg: rgba(251,191,36,0.07);
+  --fk: #34d399;
+  --fk-bg: rgba(52,211,153,0.07);
+  --pkfk: #fb923c;
+  --pkfk-bg: rgba(251,146,60,0.08);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --topbar-bg: rgba(8,8,13,0.82);
+  --panel-bg: rgba(16,16,24,0.88);
+}
+
+[data-theme="light"] {
+  --bg: #f4f4f8;
+  --bg-dot: #dddde6;
+  --surface: #ffffff;
+  --surface-up: #f0f0f6;
+  --border: #d4d4de;
+  --border-hi: #b8b8c8;
+  --text: #1a1a2e;
+  --text-dim: #5c5c78;
+  --text-faint: #9898ae;
+  --accent: #6366f1;
+  --accent-g: rgba(99,102,241,0.12);
+  --fact: #9333ea;
+  --fact-bg: rgba(147,51,234,0.06);
+  --fact-bdr: rgba(147,51,234,0.25);
+  --dim: #2563eb;
+  --dim-bg: rgba(37,99,235,0.05);
+  --dim-bdr: rgba(37,99,235,0.22);
+  --snow: #059669;
+  --snow-bg: rgba(5,150,105,0.05);
+  --snow-bdr: rgba(5,150,105,0.22);
+  --pk: #d97706;
+  --pk-bg: rgba(217,119,6,0.08);
+  --fk: #059669;
+  --fk-bg: rgba(5,150,105,0.08);
+  --pkfk: #ea580c;
+  --pkfk-bg: rgba(234,88,12,0.08);
+  --topbar-bg: rgba(244,244,248,0.85);
+  --panel-bg: rgba(255,255,255,0.9);
+}

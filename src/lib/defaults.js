@@ -1,0 +1,9 @@
+export const DEFAULT_DBML = `Table users {
+  id integer [primary key]
+  username varchar(255) [not null, unique]
+  full_name varchar(255) [not null]
+  gender varchar(1) [not null]
+  source varchar(255) [default: 'direct']
+  created_at timestamp [default: now()]
+  rating integer [default: 10]
+}`;
