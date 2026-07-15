@@ -1,14 +1,20 @@
-<script>
+<script lang="ts">
   import { onMount, tick } from 'svelte';
   import * as htmlToImage from 'html-to-image';
+  import type { CompiledDBML, Table, TableField } from './parser';
 
-  let { data, theme, lineMode = 'ortho' } = $props();
+  let { data, theme, lineMode = 'ortho' }: {
+    data: CompiledDBML;
+    theme: string;
+    lineMode?: string;
+  } = $props();
 
   // --- Plain JS state (NOT reactive — no re-renders on change) ---
   let zoom = 1, panX = 0, panY = 0;
-  let isPan = false, dragTarget = null;
-  let psx, psy, ppx, ppy, dox, doy;
-  let hovTable = null, hovField = null;
+  let isPan = false;
+  let dragTarget: string | null = null;
+  let psx = 0, psy = 0, ppx = 0, ppy = 0, dox = 0, doy = 0;
+  let hovTable: string | null = null, hovField: string | null = null;
   let rafId = 0;
 
   // --- Minimal $state (only what the template actually binds to) ---
@@ -18,7 +24,9 @@
   let tipY = $state(0);
   let tipHtml = $state('');
 
-  let worldEl, canvasEl, svgEl;
+  let worldEl: HTMLDivElement | undefined = $state();
+  let canvasEl: HTMLDivElement | undefined = $state();
+  let svgEl: SVGSVGElement | undefined = $state();
 
   // Debounced draw — max 1 per frame
   function schedDraw() {
@@ -34,8 +42,7 @@
   $effect(() => { data; lineMode; schedDraw(); });
 
   onMount(() => {
-    // Global listeners for mousemove/mouseup (need to work outside canvas)
-    const onMove = (e) => handleMove(e);
+    const onMove = (e: MouseEvent) => handleMove(e);
     const onUp = () => handleUp();
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -48,7 +55,7 @@
     };
   });
 
-  export function executeAction(a) {
+  export function executeAction(a: string) {
     if (a === 'fit') fitAll();
     if (a === 'svg') doExportSVG();
     if (a === 'png') doExportPNG();
@@ -77,13 +84,13 @@
       const frr = fr.getBoundingClientRect(), trr = tr.getBoundingClientRect();
       const fcx = (fcr.left + fcr.right) * 0.5, tcx = (tcr.left + tcr.right) * 0.5;
 
-      let sx, ex;
+      let sx: number, ex: number;
       if (fcx < tcx) { sx = (fcr.right - wr.left) / z; ex = (tcr.left - wr.left) / z; }
       else { sx = (fcr.left - wr.left) / z; ex = (tcr.right - wr.left) / z; }
       const sy = (frr.top + frr.height * 0.5 - wr.top) / z;
       const ey = (trr.top + trr.height * 0.5 - wr.top) / z;
 
-      let d;
+      let d: string;
       if (lineMode === 'ortho') {
         const mx = (sx + ex) * 0.5;
         d = `M${sx} ${sy}L${mx} ${sy}L${mx} ${ey}L${ex} ${ey}`;
@@ -106,35 +113,33 @@
     svgEl.innerHTML = out;
   }
 
-  function csym(t) {
+  function csym(t: string): [string, string] {
     return t === '>' ? ['*', '1'] : t === '<' ? ['1', '*'] : t === '-' ? ['1', '1'] : t === '<>' ? ['*', '*'] : ['', ''];
   }
 
-  // ==== CANVAS PAN (Svelte event — propagation works correctly) ====
-  function canvasDown(e) {
+  // ==== CANVAS PAN ====
+  function canvasDown(e: MouseEvent) {
     if (e.button !== 0) return;
-    // Don't start pan if a drag just started (stopPropagation handles this,
-    // but double-check in case)
     if (dragTarget) return;
     isPan = true;
     psx = e.clientX; psy = e.clientY;
     ppx = panX; ppy = panY;
-    canvasEl.style.cursor = 'grabbing';
+    if (canvasEl) canvasEl.style.cursor = 'grabbing';
   }
 
-  // ==== DRAG TABLE CARD (Svelte event on .thead) ====
-  function startDrag(e, name) {
+  // ==== DRAG TABLE CARD ====
+  function startDrag(e: MouseEvent, name: string) {
     if (e.button !== 0) return;
-    e.stopPropagation(); // ← prevents canvasDown from firing
+    e.stopPropagation();
     dragTarget = name;
-    const card = e.currentTarget.closest('.tcard');
+    const card = (e.currentTarget as HTMLElement).closest('.tcard') as HTMLElement;
     const r = card.getBoundingClientRect();
     dox = (e.clientX - r.left) / zoom;
     doy = (e.clientY - r.top) / zoom;
   }
 
-  // ==== GLOBAL MOVE/UP (plain JS, attached in onMount) ====
-  function handleMove(e) {
+  // ==== GLOBAL MOVE/UP ====
+  function handleMove(e: MouseEvent) {
     if (isPan) {
       panX = ppx + (e.clientX - psx);
       panY = ppy + (e.clientY - psy);
@@ -143,13 +148,12 @@
       return;
     }
     if (dragTarget) {
+      if (!worldEl) return;
       const wr = worldEl.getBoundingClientRect();
       const nx = (e.clientX - wr.left) / zoom - dox;
       const ny = (e.clientY - wr.top) / zoom - doy;
-      // Direct DOM update — zero Svelte overhead
-      const card = worldEl.querySelector(`.tcard[data-t="${dragTarget}"]`);
+      const card = worldEl.querySelector(`.tcard[data-t="${dragTarget}"]`) as HTMLElement;
       if (card) { card.style.left = nx + 'px'; card.style.top = ny + 'px'; }
-      // Keep data in sync silently
       if (data.positions[dragTarget]) {
         data.positions[dragTarget].x = nx;
         data.positions[dragTarget].y = ny;
@@ -157,7 +161,6 @@
       schedDraw();
       return;
     }
-    // Tooltip follow
     if (tipVis) { tipX = e.clientX + 12; tipY = e.clientY + 12; }
   }
 
@@ -168,8 +171,9 @@
   }
 
   // ==== WHEEL ZOOM ====
-  function onWheel(e) {
+  function onWheel(e: WheelEvent) {
     e.preventDefault();
+    if (!canvasEl) return;
     const r = canvasEl.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top, oz = zoom;
     zoom = Math.max(0.12, Math.min(4, zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
@@ -181,6 +185,7 @@
   }
 
   function doZoomIn() {
+    if (!canvasEl) return;
     const r = canvasEl.getBoundingClientRect();
     const cx = r.width * 0.5, cy = r.height * 0.5, oz = zoom;
     zoom = Math.min(4, zoom * 1.2);
@@ -191,6 +196,7 @@
   }
 
   function doZoomOut() {
+    if (!canvasEl) return;
     const r = canvasEl.getBoundingClientRect();
     const cx = r.width * 0.5, cy = r.height * 0.5, oz = zoom;
     zoom = Math.max(0.12, zoom / 1.2);
@@ -203,7 +209,7 @@
   async function fitAll() {
     await tick();
     if (!worldEl || !canvasEl) return;
-    const cards = worldEl.querySelectorAll('.tcard');
+    const cards = worldEl.querySelectorAll<HTMLElement>('.tcard');
     if (!cards.length) return;
     let mnx = 1e9, mny = 1e9, mxx = -1e9, mxy = -1e9;
     cards.forEach(c => {
@@ -222,6 +228,7 @@
 
   // ==== EXPORT ====
   async function doExportPNG() {
+    if (!worldEl) return;
     const sz = zoom, sp = panX, spy = panY;
     zoom = 1; panX = 0; panY = 0; applyTf();
     await tick(); drawLines();
@@ -234,6 +241,7 @@
   }
 
   async function doExportSVG() {
+    if (!worldEl) return;
     const sz = zoom, sp = panX, spy = panY;
     zoom = 1; panX = 0; panY = 0; applyTf();
     await tick(); drawLines();
@@ -245,13 +253,13 @@
     await tick(); drawLines();
   }
 
-  function dl(url, name) { const a = document.createElement('a'); a.download = name; a.href = url; a.click(); }
+  function dl(url: string, name: string) { const a = document.createElement('a'); a.download = name; a.href = url; a.click(); }
 
   // ==== TOOLTIP ====
-  function showTip(table, field, e) {
+  function showTip(table: Table, field: TableField, e: MouseEvent) {
     hovTable = table.name; hovField = field.name;
     let h = `<div class="tf">${esc(field.name)}</div><div class="tt">${esc(field.type)}</div>`;
-    const b = [];
+    const b: string[] = [];
     if (field.isPK) b.push('<span class="c-pk">PK</span>');
     if (field.isFK) b.push('<span class="c-fk">FK</span>');
     if (field.notNull) b.push('<span class="c-nn">NN</span>');
@@ -261,7 +269,6 @@
     if (field.note) h += `<div class="tn">${esc(field.note)}</div>`;
     tipHtml = h; tipVis = true; tipX = e.clientX + 12; tipY = e.clientY + 12;
 
-    // Highlight connected cards via DOM (no Svelte)
     worldEl?.querySelectorAll('.tcard.hi').forEach(c => c.classList.remove('hi'));
     worldEl?.querySelector(`.tcard[data-t="${hovTable}"]`)?.classList.add('hi');
     data.refs.filter(r => (r.fromTable === hovTable && r.fromField === hovField) || (r.toTable === hovTable && r.toField === hovField))
@@ -275,50 +282,42 @@
     schedDraw();
   }
 
-  function esc(s) { 
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
-}
-
-function getTableClass(n) {
-  // Validação inicial
-  if (!n || typeof n !== 'string') return '';
-  
-  // Fact tables
-  if (n.startsWith('fact_')) return 'c-fact';
-  
-  // Verifica referências apenas se data existe
-  if (data && Array.isArray(data.refs)) {
-    const referencesNonFact = data.refs.some(r => 
-      r.fromTable === n && !r.toTable?.startsWith('fact_') && r.fromTable !== r.toTable
-    );
-    const referencedByFact = data.refs.some(r => 
-      r.toTable === n && r.fromTable?.startsWith('fact_')
-    );
-    
-    // Snow tables (dim tables that reference non-fact tables)
-    if (n.startsWith('dim_') && referencesNonFact && !referencedByFact) {
-      return 'c-snow';
-    }
+  function esc(s: string): string { 
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
   }
-  
-  // Regular dimension tables
-  if (n.startsWith('dim_')) return 'c-dim';
-  
-  // Default: vazio para tabelas não categorizadas
-  return '';
-}
 
-function getTag(c) {
-  if (!c) return '';
-  
-  const tagMap = {
-    'c-fact': 'FACT',
-    'c-snow': 'SNOW',
-    'c-dim': 'DIM'
-  };
-  
-  return tagMap[c] || '';
-}
+  function getTableClass(n: string): string {
+    if (!n) return '';
+
+    if (n.startsWith('fact_')) return 'c-fact';
+
+    if (data && Array.isArray(data.refs)) {
+      const referencesNonFact = data.refs.some(r => 
+        r.fromTable === n && !r.toTable?.startsWith('fact_') && r.fromTable !== r.toTable
+      );
+      const referencedByFact = data.refs.some(r => 
+        r.toTable === n && r.fromTable?.startsWith('fact_')
+      );
+
+      if (n.startsWith('dim_') && referencesNonFact && !referencedByFact) {
+        return 'c-snow';
+      }
+    }
+
+    if (n.startsWith('dim_')) return 'c-dim';
+
+    return '';
+  }
+
+  function getTag(c: string): string {
+    if (!c) return '';
+    const tagMap: Record<string, string> = {
+      'c-fact': 'FACT',
+      'c-snow': 'SNOW',
+      'c-dim': 'DIM'
+    };
+    return tagMap[c] || '';
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->

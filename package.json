@@ -6,12 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "svelte": "^5.45.2",
-    "vite": "^7.3.1"
+    "svelte-check": "^4.7.2",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

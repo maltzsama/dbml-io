@@ -1,10 +1,14 @@
-<script>
-  let { code = $bindable(), theme } = $props();
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { render } from 'monza-editor';
+  import type { TextareaEvent } from 'monza-editor';
+  import 'monza-editor/style.css';
 
-  let textareaEl = $state();
-  let highlightedHtml = $derived(highlight(code));
+  let { code = $bindable(), theme }: { code: string; theme: string } = $props();
 
-  function highlight(text) {
+  let editorDiv: HTMLDivElement | undefined = $state();
+
+  function highlight(text: string): string {
     return text
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\b(Table|Enum|Ref|Project|Note|TableGroup|indexes|checks|records)\b/g, '<span class="tok-key">$1</span>')
@@ -14,43 +18,27 @@
       .replace(/\/\/(.*)/g, '<span class="tok-com">//$1</span>');
   }
 
-  function handleInput(e) {
-    code = e.target.value;
-  }
+  onMount(() => {
+    if (!editorDiv) return;
+    render(editorDiv, {
+      value: code,
+      highlight,
+      onInput: (e: TextareaEvent) => { code = e.target.value; },
+    });
+  });
 
-  function handleKeydown(e) {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const ta = e.target;
-      const start = ta.selectionStart, end = ta.selectionEnd;
-      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
-      ta.selectionStart = ta.selectionEnd = start + 2;
-      code = ta.value;
+  $effect(() => {
+    const ta = editorDiv?.querySelector<HTMLTextAreaElement>('textarea');
+    if (ta && ta.value !== code) {
+      ta.value = code;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
     }
-  }
-
-  function syncScroll(e) {
-    const pre = e.target.parentElement.querySelector('.highlight-layer');
-    if (pre) { pre.scrollTop = e.target.scrollTop; pre.scrollLeft = e.target.scrollLeft; }
-  }
+  });
 </script>
 
 <div class="editor-pane">
   <div class="filename">schema.dbml</div>
-  <div class="editor-wrap">
-    <pre class="highlight-layer" aria-hidden="true">{@html highlightedHtml + '\n'}</pre>
-    <textarea
-      bind:this={textareaEl}
-      value={code}
-      oninput={handleInput}
-      onkeydown={handleKeydown}
-      onscroll={syncScroll}
-      spellcheck="false"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-    ></textarea>
-  </div>
+  <div bind:this={editorDiv} class="editor-wrap"></div>
 </div>
 
 <style>
@@ -77,37 +65,21 @@
     flex: 1;
     position: relative;
     overflow: hidden;
-  }
-
-  .highlight-layer, textarea {
-    position: absolute;
-    inset: 0;
-    padding: 16px;
+    --me-padding: 16px;
     font-family: var(--mono);
     font-size: 13px;
     line-height: 1.6;
     tab-size: 2;
     white-space: pre;
-    overflow: auto;
-    margin: 0;
-    border: none;
-    outline: none;
-    resize: none;
   }
 
-  .highlight-layer {
-    pointer-events: none;
-    color: var(--text);
-    z-index: 1;
-    background: transparent;
-  }
-
-  textarea {
-    color: transparent;
-    caret-color: var(--text);
-    background: transparent;
-    z-index: 2;
-    -webkit-text-fill-color: transparent;
+  .editor-wrap :global(textarea),
+  .editor-wrap :global(pre) {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    white-space: pre !important;
+    tab-size: 2;
   }
 
   :global(.tok-key) { color: var(--accent); font-weight: 600; }

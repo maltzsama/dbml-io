@@ -2,15 +2,90 @@
 // DBML Parser — Full spec compliant
 // ============================================================================
 
-function parseDBML(rawContent) {
-  const tables = [];
-  const refs = [];
-  const enums = [];
-  const aliases = {};
-  const tableGroups = [];
-  let projectInfo = null;
+export interface TableField {
+  name: string;
+  type: string;
+  isPK: boolean;
+  isFK: boolean;
+  note: string;
+  notNull: boolean;
+  unique: boolean;
+  increment: boolean;
+  defaultVal: string;
+}
 
-  function stripComments(src) {
+export interface Table {
+  name: string;
+  fields: TableField[];
+  note: string;
+  headerColor: string;
+}
+
+export interface EnumValue {
+  value: string;
+  note: string;
+}
+
+export interface Enum {
+  name: string;
+  values: EnumValue[];
+}
+
+export interface Ref {
+  fromTable: string;
+  fromField: string;
+  toTable: string;
+  toField: string;
+  type: string;
+}
+
+export interface TableGroup {
+  name: string;
+  members: string[];
+  note: string;
+}
+
+export interface ProjectInfo {
+  name: string;
+  databaseType: string;
+  note: string;
+}
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface CompiledDBML {
+  tables: Table[];
+  refs: Ref[];
+  enums: Enum[];
+  enumLookup: Record<string, Enum>;
+  tableGroups: TableGroup[];
+  positions: Record<string, Position>;
+  projectInfo: ProjectInfo | null;
+  error: string | null;
+}
+
+interface ParsedDBML {
+  tables: Table[];
+  refs: Ref[];
+  enums: Enum[];
+  aliases: Record<string, string>;
+  tableGroups: TableGroup[];
+  projectInfo: ProjectInfo | null;
+  enumLookup: Record<string, Enum>;
+}
+
+function parseDBML(rawContent: string): ParsedDBML {
+  const tables: Table[] = [];
+  const refs: Ref[] = [];
+  const enums: Enum[] = [];
+  const aliases: Record<string, string> = {};
+  const tableGroups: TableGroup[] = [];
+  let projectInfo: ProjectInfo | null = null;
+
+  function stripComments(src: string): string {
     let out = '';
     let i = 0;
     while (i < src.length) {
@@ -42,7 +117,7 @@ function parseDBML(rawContent) {
 
   const content = stripComments(rawContent);
 
-  function extractBlock(src, openPos) {
+  function extractBlock(src: string, openPos: number): { body: string; end: number } {
     let depth = 1, i = openPos;
     while (i < src.length && depth > 0) {
       if (src[i] === '{') depth++;
@@ -53,7 +128,7 @@ function parseDBML(rawContent) {
     return { body: src.slice(openPos), end: src.length };
   }
 
-  function extractNote(optStr) {
+  function extractNote(optStr: string): string {
     const tripleMatch = optStr.match(/note:\s*'''([\s\S]*?)'''/);
     if (tripleMatch) return tripleMatch[1].trim();
     const singleMatch = optStr.match(/note:\s*'([^']*)'/);
@@ -61,7 +136,7 @@ function parseDBML(rawContent) {
     return '';
   }
 
-  function extractTableNote(body) {
+  function extractTableNote(body: string): string {
     const tripleMatch = body.match(/\bNote\s*:\s*'''([\s\S]*?)'''/);
     if (tripleMatch) return tripleMatch[1].trim();
     const blockTriple = body.match(/\bNote\s*\{\s*'''([\s\S]*?)'''\s*\}/);
@@ -73,8 +148,26 @@ function parseDBML(rawContent) {
     return '';
   }
 
-  function parseColumnSettings(optStr) {
-    const settings = {
+  interface RefSetting {
+    type: string;
+    table: string;
+    field: string;
+  }
+
+  interface ColumnSettings {
+    isPK: boolean;
+    isFK: boolean;
+    note: string;
+    notNull: boolean;
+    isNull: boolean;
+    unique: boolean;
+    increment: boolean;
+    defaultVal: string;
+    refs: RefSetting[];
+  }
+
+  function parseColumnSettings(optStr: string): ColumnSettings {
+    const settings: ColumnSettings = {
       isPK: false, isFK: false, note: '', notNull: false, isNull: false,
       unique: false, increment: false, defaultVal: '', refs: [],
     };
@@ -91,7 +184,7 @@ function parseDBML(rawContent) {
     if (defMatch) settings.defaultVal = defMatch[1] || defMatch[2] || defMatch[3] || '';
 
     const refPattern = /ref:\s*([<>\-]+)\s*([\w.]+)\.([\w]+)/g;
-    let rm;
+    let rm: RegExpExecArray | null;
     while ((rm = refPattern.exec(optStr)) !== null) {
       const parts = rm[2].split('.');
       settings.refs.push({
@@ -118,9 +211,9 @@ function parseDBML(rawContent) {
     const headerColorMatch = tableSettings.match(/headercolor:\s*(#?\w+)/i);
     const headerColor = headerColorMatch ? headerColorMatch[1] : '';
 
-    const compositePKFields = [];
+    const compositePKFields: string[] = [];
     const idxBlockMatch = body.match(/\bindexes\s*\{/);
-    if (idxBlockMatch) {
+    if (idxBlockMatch && idxBlockMatch.index !== undefined) {
       const idxStart = body.indexOf('{', idxBlockMatch.index + 7) + 1;
       const idxBlock = extractBlock(body, idxStart);
       const pkLine = idxBlock.body.match(/\(([^)]+)\)\s*\[([^\]]*)\]/g);
@@ -250,32 +343,32 @@ function parseDBML(rawContent) {
 
   // --- Parse Project ---
   const projMatch = content.match(/\bProject\s+([\w.]+)\s*\{/);
-  if (projMatch) {
+  if (projMatch && projMatch.index !== undefined) {
     const { body } = extractBlock(content, projMatch.index + projMatch[0].length);
     const dbType = body.match(/database_type:\s*'([^']*)'/);
     projectInfo = { name: projMatch[1], databaseType: dbType ? dbType[1] : '', note: extractTableNote(body) };
   }
 
   // --- Resolve aliases ---
-  function resolveAlias(n) { return aliases[n] || n; }
+  function resolveAlias(n: string): string { return aliases[n] || n; }
   for (const r of refs) { r.fromTable = resolveAlias(r.fromTable); r.toTable = resolveAlias(r.toTable); }
 
-  const enumLookup = {};
+  const enumLookup: Record<string, Enum> = {};
   for (const e of enums) enumLookup[e.name] = e;
 
   return { tables, refs, enums, aliases, tableGroups, projectInfo, enumLookup };
 }
 
-function computeLayout(tables, refs) {
+function computeLayout(tables: Table[], refs: Ref[]): Record<string, Position> {
   const factNames = tables.filter(t => t.name.startsWith('fact_')).map(t => t.name);
   const dimNames = tables.filter(t => !t.name.startsWith('fact_')).map(t => t.name);
-  const positions = {};
+  const positions: Record<string, Position> = {};
 
   if (factNames.length > 0) {
     const cx = 900, cy = 600;
     positions[factNames[0]] = { x: cx, y: cy };
 
-    const connDims = [], unconDims = [];
+    const connDims: string[] = [], unconDims: string[] = [];
     for (const d of dimNames) {
       const conn = refs.some(r => (r.fromTable === d || r.toTable === d) && (r.fromTable === factNames[0] || r.toTable === factNames[0]));
       (conn ? connDims : unconDims).push(d);
@@ -312,19 +405,21 @@ function computeLayout(tables, refs) {
   return positions;
 }
 
-export function compileDBML(rawContent) {
+export function compileDBML(rawContent: string): CompiledDBML {
   try {
     const parsed = parseDBML(rawContent);
     const positions = computeLayout(parsed.tables, parsed.refs);
     return {
       tables: parsed.tables, refs: parsed.refs, enums: parsed.enums,
-      enumLookup: parsed.enumLookup, positions, projectInfo: parsed.projectInfo,
+      enumLookup: parsed.enumLookup, tableGroups: parsed.tableGroups,
+      positions, projectInfo: parsed.projectInfo,
       error: null,
     };
   } catch (err) {
     return {
-      tables: [], refs: [], enums: [], enumLookup: {}, positions: {},
-      projectInfo: null, error: err.message,
+      tables: [], refs: [], enums: [], enumLookup: {},
+      tableGroups: [], positions: {},
+      projectInfo: null, error: (err as Error).message,
     };
   }
 }

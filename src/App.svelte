@@ -1,6 +1,6 @@
-<script>
-  import { compileDBML } from './lib/parser.js';
-  import { DEFAULT_DBML } from './lib/defaults.js';
+<script lang="ts">
+  import { compileDBML, type CompiledDBML } from './lib/parser';
+  import { DEFAULT_DBML } from './lib/defaults';
   import Sidebar from './lib/Sidebar.svelte';
   import Editor from './lib/Editor.svelte';
   import Diagram from './lib/Diagram.svelte';
@@ -9,15 +9,17 @@
   let theme = $state('dark');
   let lineMode = $state('ortho');
   let dbmlCode = $state(DEFAULT_DBML);
-  let parsedData = $derived(compileDBML(dbmlCode));
+  let parsedData: CompiledDBML = $derived(compileDBML(dbmlCode));
 
-  let diagramRef = $state();
+  let diagramRef: { executeAction: (a: string) => void } | undefined = $state();
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   });
 
-  function handleAction(action) {
+  type Action = 'theme' | 'line' | 'fit' | 'svg' | 'png';
+
+  function handleAction(action: Action) {
     if (action === 'theme') {
       theme = theme === 'light' ? 'dark' : 'light';
     } else if (action === 'line') {

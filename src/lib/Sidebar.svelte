@@ -1,5 +1,9 @@
-<script>
-  let { theme, lineMode, onaction } = $props();
+<script lang="ts">
+  let { theme, lineMode, onaction }: {
+    theme: string;
+    lineMode: string;
+    onaction: (action: string) => void;
+  } = $props();
 </script>
 
 <aside class="sidebar">
