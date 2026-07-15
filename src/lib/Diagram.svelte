@@ -31,6 +31,9 @@
   let svgW = $state(8000);
   let svgH = $state(8000);
 
+  let lineAdj = $state<Record<number, number>>({});
+  let dragLine: number | null = null;
+
   let searchQuery = $state('');
   let searchInput: HTMLInputElement | undefined = $state();
   let searchFocused = $state(false);
@@ -116,52 +119,303 @@
 
     const wr = worldEl.getBoundingClientRect();
     const z = zoom;
-    let out = '';
+
+    // ── Pass 1: compute port positions per ref ──
+    type Rd = { sx: number; sy: number; ex: number; ey: number; dirS: number; dirE: number };
+    const rds: (Rd | null)[] = [];
 
     for (let i = 0; i < refs.length; i++) {
       const r = refs[i];
       const fc = worldEl.querySelector(`.tcard[data-t="${r.fromTable}"]`);
       const tc = worldEl.querySelector(`.tcard[data-t="${r.toTable}"]`);
-      if (!fc || !tc) continue;
+      if (!fc || !tc) { rds.push(null); continue; }
       const fr = fc.querySelector(`.frow[data-f="${r.fromField}"]`);
       const tr = tc.querySelector(`.frow[data-f="${r.toField}"]`);
-      if (!fr || !tr) continue;
+      if (!fr || !tr) { rds.push(null); continue; }
 
       const fcr = fc.getBoundingClientRect(), tcr = tc.getBoundingClientRect();
       const frr = fr.getBoundingClientRect(), trr = tr.getBoundingClientRect();
       const fcx = (fcr.left + fcr.right) * 0.5, tcx = (tcr.left + tcr.right) * 0.5;
 
-      let sx: number, ex: number;
-      if (fcx < tcx) { sx = (fcr.right - wr.left) / z; ex = (tcr.left - wr.left) / z; }
-      else { sx = (fcr.left - wr.left) / z; ex = (tcr.right - wr.left) / z; }
+      let sx: number, ex: number, dirS: number, dirE: number;
+      if (fcx >= tcx) { sx = (fcr.left - wr.left) / z; ex = (tcr.right - wr.left) / z; dirS = -1; dirE = 1; }
+      else            { sx = (fcr.right - wr.left) / z; ex = (tcr.left - wr.left) / z; dirS = 1; dirE = -1; }
       const sy = (frr.top + frr.height * 0.5 - wr.top) / z;
       const ey = (trr.top + trr.height * 0.5 - wr.top) / z;
 
-      let d: string;
-      if (lineMode === 'ortho') {
-        const mx = (sx + ex) * 0.5;
-        d = `M${sx} ${sy}L${mx} ${sy}L${mx} ${ey}L${ex} ${ey}`;
-      } else {
-        const cp = Math.max(50, Math.abs(ex - sx) * 0.35);
-        d = `M${sx} ${sy}C${sx < ex ? sx + cp : sx - cp} ${sy},${sx < ex ? ex - cp : ex + cp} ${ey},${ex} ${ey}`;
-      }
+      rds.push({ sx, sy, ex, ey, dirS, dirE });
+    }
 
+    // ── Pass 2: grid route + nudge + draw ──
+    // Collect table bounding boxes (original, no padding — padding applied in the router)
+    const tRects: { t: string; x1: number; y1: number; x2: number; y2: number }[] = [];
+    for (const card of worldEl.querySelectorAll('.tcard')) {
+      const t = (card as HTMLElement).dataset.t;
+      if (!t) continue;
+      const cr = card.getBoundingClientRect();
+      tRects.push({ t, x1: (cr.left - wr.left) / z, y1: (cr.top - wr.top) / z, x2: (cr.right - wr.left) / z, y2: (cr.bottom - wr.top) / z });
+    }
+
+    // Route each ref through the grid router
+    const routed: { pts: Pt[]; i: number }[] = [];
+    for (let i = 0; i < refs.length; i++) {
+      const rd = rds[i];
+      if (!rd) continue;
+      const r = refs[i];
+      const obs = tRects.filter(o => o.t !== r.fromTable && o.t !== r.toTable);
+      const path = routeRef(rd.sx, rd.sy, rd.ex, rd.ey, rd.dirS, rd.dirE, obs);
+      const adj = lineAdj[i] ?? 0;
+      if (adj !== 0) for (let j = 1; j < path.length - 1; j++) path[j].x += adj;
+      routed.push({ pts: path, i });
+    }
+
+    // Nudge shared horizontal segments apart
+    nudgePaths(routed.map(p => p.pts));
+
+    // Render
+    let out = '';
+    for (const { pts: path, i } of routed) {
+      const rd = rds[i]!;
+      const r = refs[i];
+      const sp = lineMode === 'ortho' ? simplify(path) : path;
+      const d = lineMode === 'ortho' ? roundPolyline(sp, 6) : '';
       const hi = hovTable && ((r.fromTable === hovTable && r.fromField === hovField) || (r.toTable === hovTable && r.toField === hovField));
       const h = hi ? ' hi' : '';
+      const dl = dragLine === i ? ' dl' : '';
 
-      out += `<path d="${d}" class="rel${h}"/>`;
-      out += `<circle cx="${sx}" cy="${sy}" r="3.5" class="rdot${h}"/>`;
-      out += `<circle cx="${ex}" cy="${ey}" r="3.5" class="rdot${h}"/>`;
+      if (lineMode === 'ortho') {
+        out += `<path d="${d}" class="rel-bg" data-ref="${i}"/>`;
+        out += `<path d="${d}" class="rel${h}"/>`;
+        const mid = Math.floor(sp.length / 2);
+        if (hi || dl) out += `<circle cx="${sp[mid].x}" cy="${sp[mid].y}" r="5" class="lhandle${dl}" data-ref="${i}"/>`;
+      } else {
+        const cp = Math.max(50, Math.abs(rd.ex - rd.sx) * 0.35);
+        const bd = `M${rd.sx} ${rd.sy}C${rd.sx < rd.ex ? rd.sx + cp : rd.sx - cp} ${rd.sy},${rd.sx < rd.ex ? rd.ex - cp : rd.ex + cp} ${rd.ey},${rd.ex} ${rd.ey}`;
+        out += `<path d="${bd}" class="rel-bg" data-ref="${i}"/>`;
+        out += `<path d="${bd}" class="rel${h}"/>`;
+      }
 
+      out += `<circle cx="${rd.sx}" cy="${rd.sy}" r="3.5" class="rdot${h}"/>`;
+      out += `<circle cx="${rd.ex}" cy="${rd.ey}" r="3.5" class="rdot${h}"/>`;
       const cs = csym(r.type || '>');
-      if (cs[0]) out += `<text x="${sx + (sx < ex ? 14 : -14)}" y="${sy - 8}" text-anchor="${sx < ex ? 'start' : 'end'}" class="clbl${h}">${cs[0]}</text>`;
-      if (cs[1]) out += `<text x="${ex + (sx < ex ? -14 : 14)}" y="${ey - 8}" text-anchor="${sx < ex ? 'end' : 'start'}" class="clbl${h}">${cs[1]}</text>`;
+      if (cs[0]) out += `<text x="${rd.sx + (rd.sx < rd.ex ? 14 : -14)}" y="${rd.sy - 8}" text-anchor="${rd.sx < rd.ex ? 'start' : 'end'}" class="clbl${h}">${cs[0]}</text>`;
+      if (cs[1]) out += `<text x="${rd.ex + (rd.sx < rd.ex ? -14 : 14)}" y="${rd.ey - 8}" text-anchor="${rd.sx < rd.ex ? 'end' : 'start'}" class="clbl${h}">${cs[1]}</text>`;
     }
     svgEl.innerHTML = out;
   }
 
+  // ── Routing engine ──
+  type Pt = { x: number; y: number };
+  interface TabBox { t?: string; x1: number; y1: number; x2: number; y2: number }
+
+  /** Check whether an axis-aligned segment strictly crosses any box. */
+  function segHit(x1: number, y1: number, x2: number, y2: number, boxes: TabBox[], pad = 0): boolean {
+    if (y1 === y2) {
+      const xL = Math.min(x1, x2), xR = Math.max(x1, x2);
+      for (const b of boxes) {
+        if (y1 > b.y1 - pad && y1 < b.y2 + pad && xL < b.x2 + pad && xR > b.x1 - pad) return true;
+      }
+    } else if (x1 === x2) {
+      const yT = Math.min(y1, y2), yB = Math.max(y1, y2);
+      for (const b of boxes) {
+        if (x1 > b.x1 - pad && x1 < b.x2 + pad && yT < b.y2 + pad && yB > b.y1 - pad) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Orthogonal grid router (visibility graph + Dijkstra with bend penalty).
+   * Ports get a mandatory perpendicular STUB so the line never turns right at
+   * the table edge. Routing happens between the stub tips; the real port points
+   * are prepended/appended so anchors always sit on the column row.
+   */
+  function routeRef(sx: number, sy: number, ex: number, ey: number, dirS: number, dirE: number, obstacles: TabBox[]): Pt[] {
+    const PAD = 12, STUB = 16;
+    const ax = sx + STUB * dirS, ay = sy;
+    const bx = ex + STUB * dirE, by = ey;
+
+    const xs = new Set<number>([ax, bx]);
+    const ys = new Set<number>([ay, by]);
+    for (const o of obstacles) {
+      xs.add(o.x1 - PAD); xs.add(o.x1); xs.add(o.x2); xs.add(o.x2 + PAD);
+      ys.add(o.y1 - PAD); ys.add(o.y1); ys.add(o.y2); ys.add(o.y2 + PAD);
+    }
+    const xArr = [...xs].sort((a, b) => a - b);
+    const yArr = [...ys].sort((a, b) => a - b);
+    const cols = xArr.length, rows = yArr.length, N = cols * rows;
+
+    function blocked(x: number, y: number): boolean {
+      for (const o of obstacles) {
+        if (x > o.x1 - PAD && x < o.x2 + PAD && y > o.y1 - PAD && y < o.y2 + PAD) return true;
+      }
+      return false;
+    }
+    function idx(arr: number[], v: number): number {
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < arr.length; i++) { const d = Math.abs(arr[i] - v); if (d < bd) { bd = d; best = i; } }
+      return best;
+    }
+
+    const si = idx(xArr, ax), sj = idx(yArr, ay);
+    const ei = idx(xArr, bx), ej = idx(yArr, by);
+    const start = sj * cols + si, end = ej * cols + ei;
+
+    const dist = new Float64Array(N).fill(1e9);
+    const prev = new Int32Array(N).fill(-1);
+    const prevDir = new Int8Array(N).fill(-1);
+    dist[start] = 0;
+    const open = new Set<number>([start]);
+    const BEND_COST = 400;
+
+    while (open.size > 0) {
+      let minD = 1e10, u = -1;
+      for (const v of open) { if (dist[v] < minD) { minD = dist[v]; u = v; } }
+      if (u === -1 || u === end) break;
+      open.delete(u);
+
+      const ui = u % cols, uj = Math.floor(u / cols);
+      const ux = xArr[ui], uy = yArr[uj];
+
+      const dirs: [number, number, number][] = [[ui - 1, uj, 0], [ui + 1, uj, 0], [ui, uj - 1, 1], [ui, uj + 1, 1]];
+      for (const [vi, vj, dir] of dirs) {
+        if (vi < 0 || vi >= cols || vj < 0 || vj >= rows) continue;
+        const vx = xArr[vi], vy = yArr[vj];
+        if (blocked(vx, vy)) continue;
+        if (segHit(ux, uy, vx, vy, obstacles, PAD)) continue;
+
+        const v = vj * cols + vi;
+        let cost = Math.abs(vx - ux) + Math.abs(vy - uy);
+        if (prevDir[u] !== -1 && prevDir[u] !== dir) cost += BEND_COST;
+        const nd = dist[u] + cost;
+        if (nd < dist[v]) { dist[v] = nd; prev[v] = u; prevDir[v] = dir; open.add(v); }
+      }
+    }
+
+    let core: Pt[];
+    if (dist[end] >= 1e9) {
+      const mx = (ax + bx) / 2;
+      core = [{ x: ax, y: ay }, { x: mx, y: ay }, { x: mx, y: by }, { x: bx, y: by }];
+    } else {
+      core = [];
+      let cur = end;
+      while (cur !== -1) { core.unshift({ x: xArr[cur % cols], y: yArr[Math.floor(cur / cols)] }); cur = prev[cur]; }
+    }
+
+    return [{ x: sx, y: sy }, ...core, { x: ex, y: ey }];
+  }
+
+  /**
+   * Nudge overlapping horizontal segments apart into parallel lanes.
+   * Only interior segments are moved — the first/last segments carry the port
+   * anchors and must never shift, or the line detaches from the column row.
+   */
+  function nudgePaths(paths: Pt[][]): void {
+    const NUDGE = 9;
+    type Seg = { pi: number; si: number; y: number; x1: number; x2: number };
+    const segs: Seg[] = [];
+
+    for (let pi = 0; pi < paths.length; pi++) {
+      const p = paths[pi];
+      for (let si = 1; si <= p.length - 3; si++) {
+        if (p[si].y === p[si + 1].y) {
+          segs.push({ pi, si, y: p[si].y, x1: Math.min(p[si].x, p[si + 1].x), x2: Math.max(p[si].x, p[si + 1].x) });
+        }
+      }
+    }
+
+    const byY = new Map<number, Seg[]>();
+    for (const s of segs) { const k = Math.round(s.y); if (!byY.has(k)) byY.set(k, []); byY.get(k)!.push(s); }
+
+    for (const [, group] of byY) {
+      if (group.length < 2) continue;
+      group.sort((a, b) => a.x1 - b.x1);
+
+      const used = new Array(group.length).fill(false);
+      for (let a = 0; a < group.length; a++) {
+        if (used[a]) continue;
+        const cluster: Seg[] = [group[a]];
+        used[a] = true;
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (let b = 0; b < group.length; b++) {
+            if (used[b]) continue;
+            if (cluster.some(c => c.x2 > group[b].x1 && group[b].x2 > c.x1)) {
+              cluster.push(group[b]); used[b] = true; grew = true;
+            }
+          }
+        }
+        if (cluster.length < 2) continue;
+
+        const n = cluster.length;
+        cluster.forEach((s, li) => {
+          const off = (li - (n - 1) / 2) * NUDGE;
+          const p = paths[s.pi];
+          p[s.si].y += off;
+          p[s.si + 1].y += off;
+        });
+      }
+    }
+  }
+
+  /** Remove duplicate and collinear points so corner rounding stays clean. */
+  function simplify(pts: Pt[]): Pt[] {
+    const out: Pt[] = [];
+    for (const p of pts) {
+      const n = out.length;
+      if (n && out[n - 1].x === p.x && out[n - 1].y === p.y) continue;
+      if (n >= 2) {
+        const a = out[n - 2], b = out[n - 1];
+        if ((a.x === b.x && b.x === p.x) || (a.y === b.y && b.y === p.y)) { out[n - 1] = p; continue; }
+      }
+      out.push({ x: p.x, y: p.y });
+    }
+    return out;
+  }
+
+  /** Round every interior corner of an orthogonal polyline with Q-bezier arcs. */
+  function roundPolyline(pts: Pt[], r: number): string {
+    if (pts.length < 2) return '';
+    let d = `M${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i - 1], c = pts[i], n = pts[i + 1];
+      const len1 = Math.abs(c.x - p.x) + Math.abs(c.y - p.y);
+      const len2 = Math.abs(n.x - c.x) + Math.abs(n.y - c.y);
+      const rr = Math.min(r, len1 * 0.49, len2 * 0.49);
+      if (rr <= 0) { d += `L${c.x} ${c.y}`; continue; }
+
+      let ax: number, ay: number, bx: number, by: number;
+      if (c.x === p.x) {
+        ax = c.x; ay = c.y - Math.sign(c.y - p.y) * rr;
+        bx = c.x + Math.sign(n.x - c.x) * rr; by = c.y;
+      } else {
+        ax = c.x - Math.sign(c.x - p.x) * rr; ay = c.y;
+        bx = c.x; by = c.y + Math.sign(n.y - c.y) * rr;
+      }
+      d += `L${ax} ${ay}Q${c.x} ${c.y} ${bx} ${by}`;
+    }
+    d += `L${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+    return d;
+  }
+
   function csym(t: string): [string, string] {
     return t === '>' ? ['*', '1'] : t === '<' ? ['1', '*'] : t === '-' ? ['1', '1'] : t === '<>' ? ['*', '*'] : ['', ''];
+  }
+
+  // ==== LINE DRAG (SVG child delegation) ====
+  function svgDown(e: MouseEvent) {
+    if (e.button !== 0) return;
+    const el = e.target as Element;
+    const r = el.getAttribute('data-ref');
+    if (r !== null) {
+      const idx = parseInt(r);
+      if (!isNaN(idx)) {
+        e.stopPropagation();
+        dragLine = idx;
+        if (!(idx in lineAdj)) lineAdj[idx] = 0;
+      }
+    }
   }
 
   // ==== CANVAS PAN ====
@@ -187,6 +441,25 @@
 
   // ==== GLOBAL MOVE/UP ====
   function handleMove(e: MouseEvent) {
+    if (dragLine !== null) {
+      if (!worldEl || !svgEl) return;
+      const wr = worldEl.getBoundingClientRect();
+      const refs = data?.refs;
+      if (!refs || !refs[dragLine]) return;
+      const r = refs[dragLine];
+      const fc = worldEl.querySelector(`.tcard[data-t="${r.fromTable}"]`);
+      const tc = worldEl.querySelector(`.tcard[data-t="${r.toTable}"]`);
+      if (!fc || !tc) return;
+      const fcr = fc.getBoundingClientRect(), tcr = tc.getBoundingClientRect();
+      const fcx = (fcr.left + fcr.right) * 0.5, tcx = (tcr.left + tcr.right) * 0.5;
+      let sx: number, ex: number;
+      if (fcx < tcx) { sx = (fcr.right - wr.left) / zoom; ex = (tcr.left - wr.left) / zoom; }
+      else { sx = (fcr.left - wr.left) / zoom; ex = (tcr.right - wr.left) / zoom; }
+      const mx0 = (sx + ex) * 0.5;
+      lineAdj[dragLine] = (e.clientX - wr.left) / zoom - mx0;
+      schedDraw();
+      return;
+    }
     if (isPan) {
       panX = ppx + (e.clientX - psx);
       panY = ppy + (e.clientY - psy);
@@ -196,6 +469,14 @@
     }
     if (dragTarget) {
       if (!worldEl) return;
+      // Clear line adj for refs connected to this table
+      for (const k of Object.keys(lineAdj)) {
+        const idx = parseInt(k);
+        const rr = data?.refs[idx];
+        if (rr && (rr.fromTable === dragTarget || rr.toTable === dragTarget)) {
+          delete lineAdj[idx];
+        }
+      }
       const wr = worldEl.getBoundingClientRect();
       const nx = (e.clientX - wr.left) / zoom - dox;
       const ny = (e.clientY - wr.top) / zoom - doy;
@@ -214,6 +495,7 @@
   function handleUp() {
     isPan = false;
     dragTarget = null;
+    dragLine = null;
     if (canvasEl) canvasEl.style.cursor = '';
   }
 
@@ -374,7 +656,8 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="canvas" bind:this={canvasEl} onmousedown={canvasDown} onwheel={onWheel}>
     <div class="world" bind:this={worldEl}>
-      <svg class="lsvg" bind:this={svgEl} style:width="{svgW}px" style:height="{svgH}px"></svg>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <svg class="lsvg" bind:this={svgEl} style:width="{svgW}px" style:height="{svgH}px" onmousedown={svgDown}></svg>
 
       {#each visibleTables as table (table.name)}
         {@const tc = getTableClass(table.name)}
@@ -445,8 +728,9 @@
 .world{position:absolute;transform-origin:0 0;will-change:transform}
 
 .lsvg{position:absolute;top:0;left:0;pointer-events:none;z-index:1}
-:global(.lsvg path.rel){fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke:var(--accent);opacity:0.35}
+:global(.lsvg path.rel){fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke:var(--accent);opacity:0.35;pointer-events:none}
 :global(.lsvg path.rel.hi){opacity:0.85;stroke-width:2.2}
+:global(.rel-bg){fill:none;stroke:transparent;stroke-width:14;pointer-events:auto;cursor:ew-resize}
 :global(.lsvg circle.rdot){fill:var(--accent);opacity:0.3}
 :global(.lsvg circle.rdot.hi){opacity:0.9}
 :global(.lsvg text.clbl){font-family:var(--mono);font-size:11px;font-weight:700;fill:var(--accent);opacity:0.45}
@@ -523,4 +807,8 @@
 .search-wrap .sbar::placeholder{color:var(--text-faint);font-size:10.5px}
 .sclear{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:15px;padding:0 4px;line-height:1}
 .sclear:hover{color:var(--text)}
+
+:global(.lhandle){fill:var(--accent);opacity:0.3;cursor:ew-resize;stroke:var(--accent);stroke-width:1.5;pointer-events:auto}
+:global(.lhandle:hover){opacity:0.8}
+:global(.lhandle.dl){opacity:0.9;stroke-width:2.5;r:6}
 </style>
