@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/maltzsama/dbml-io/compare/v1.0.0...v1.0.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* change deploy trigger from release to push (GITHUB_TOKEN limitation) ([bf9dbe0](https://github.com/maltzsama/dbml-io/commit/bf9dbe0f1eef371de08dfd89baa5957d4bd4b9d3))
+
 # 1.0.0 (2026-07-15)
 
 
