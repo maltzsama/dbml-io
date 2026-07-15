@@ -1,9 +1,14 @@
-<script>
-  let { theme, lineMode, onaction } = $props();
+<script lang="ts">
+  let { theme, lineMode, showEditor, onaction }: {
+    theme: string;
+    lineMode: string;
+    showEditor: boolean;
+    onaction: (action: string) => void;
+  } = $props();
 </script>
 
 <aside class="sidebar">
-  <div class="logo">⬡</div>
+    <a href="/" class="logo">⬡</a>
 
   <nav class="nav">
     <button onclick={() => onaction('theme')} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
@@ -12,6 +17,17 @@
     <button onclick={() => onaction('line')} title={lineMode === 'ortho' ? 'Bezier lines' : 'Ortho lines'}>
       {lineMode === 'ortho' ? '⌐' : '~'}
     </button>
+    <button onclick={() => onaction('editor')} title={showEditor ? 'Hide editor (Ctrl+B)' : 'Show editor (Ctrl+B)'}>
+      {showEditor ? '◧' : '◨'}
+    </button>
+    <button onclick={() => onaction('legend')} title="Toggle legend (Ctrl+L)">
+      ?
+    </button>
+
+    <div class="spacer"></div>
+
+    <button onclick={() => onaction('undo')} title="Undo (Ctrl+Z)">↩</button>
+    <button onclick={() => onaction('redo')} title="Redo (Ctrl+Shift+Z)">↪</button>
 
     <div class="spacer"></div>
 
@@ -40,6 +56,10 @@
     margin-bottom: 20px;
     color: var(--accent);
     font-weight: 700;
+    text-decoration: none;
+  }
+  .logo:hover {
+    opacity: 0.7;
   }
 
   .nav {

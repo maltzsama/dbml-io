@@ -1,56 +1,84 @@
-<script>
-  let { code = $bindable(), theme } = $props();
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { render } from 'monza-editor';
+  import type { TextareaEvent } from 'monza-editor';
+  import 'monza-editor/style.css';
 
-  let textareaEl = $state();
-  let highlightedHtml = $derived(highlight(code));
+  let { code = $bindable(), theme }: { code: string; theme: string } = $props();
 
-  function highlight(text) {
-    return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\b(Table|Enum|Ref|Project|Note|TableGroup|indexes|checks|records)\b/g, '<span class="tok-key">$1</span>')
-      .replace(/\b(pk|unique|not null|null|default|increment|primary key|note|ref|headercolor)\b/gi, '<span class="tok-attr">$1</span>')
-      .replace(/\b(int|integer|varchar|text|timestamp|datetime|boolean|float|decimal|bigint|date|array)\b/gi, '<span class="tok-type">$1</span>')
-      .replace(/'(.*?)'/g, '<span class="tok-str">\'$1\'</span>')
-      .replace(/\/\/(.*)/g, '<span class="tok-com">//$1</span>');
+  let editorDiv: HTMLDivElement | undefined = $state();
+  let paneEl: HTMLDivElement | undefined = $state();
+  let lineCount = $state(1);
+  let charCount = $state(0);
+  let copyLabel = $state('copy');
+
+  function highlight(text: string): string {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = text.split('\n');
+    const out = lines.map(line => {
+      let h = esc(line);
+      h = h.replace(/'(.*?)'/g, '<span class="tok-str">\'$1\'</span>');
+      h = h.replace(/\b(Table|Enum|Ref|Project|Note|TableGroup|indexes|checks|records)\b/g, '<span class="tok-key">$1</span>');
+      h = h.replace(/\b(pk|unique|not null|null|default|increment|primary key|note|ref|headercolor)\b/gi, '<span class="tok-attr">$1</span>');
+      h = h.replace(/\b(int|integer|varchar|text|timestamp|datetime|boolean|float|decimal|bigint|date|array|serial|bigserial)\b/gi, '<span class="tok-type">$1</span>');
+      h = h.replace(/\b\d+\b/g, '<span class="tok-num">$&</span>');
+      h = h.replace(/([\[\]{}()])/g, '<span class="tok-bra">$1</span>');
+      h = h.replace(/(--.*)/g, '<span class="tok-com">$1</span>');
+      h = h.replace(/\/\/(.*)/g, '<span class="tok-com">//$1</span>');
+      return h;
+    });
+    return out.join('\n');
   }
 
-  function handleInput(e) {
-    code = e.target.value;
-  }
+  onMount(() => {
+    if (!editorDiv) return;
+    render(editorDiv, {
+      value: code,
+      highlight,
+      onInput: (e: TextareaEvent) => { code = e.target.value; },
+    });
+  });
 
-  function handleKeydown(e) {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const ta = e.target;
-      const start = ta.selectionStart, end = ta.selectionEnd;
-      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
-      ta.selectionStart = ta.selectionEnd = start + 2;
-      code = ta.value;
+  $effect(() => {
+    lineCount = code.split('\n').length;
+    charCount = code.length;
+  });
+
+  $effect(() => {
+    const ta = editorDiv?.querySelector<HTMLTextAreaElement>('textarea');
+    if (ta && ta.value !== code) {
+      ta.value = code;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
     }
+  });
+
+  function copyCode() {
+    navigator.clipboard.writeText(code).then(() => {
+      copyLabel = 'copied!';
+      setTimeout(() => copyLabel = 'copy', 1200);
+    });
   }
 
-  function syncScroll(e) {
-    const pre = e.target.parentElement.querySelector('.highlight-layer');
-    if (pre) { pre.scrollTop = e.target.scrollTop; pre.scrollLeft = e.target.scrollLeft; }
+  function formatCode() {
+    code = code
+      .split('\n')
+      .map(l => l.trimEnd())
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 </script>
 
-<div class="editor-pane">
-  <div class="filename">schema.dbml</div>
-  <div class="editor-wrap">
-    <pre class="highlight-layer" aria-hidden="true">{@html highlightedHtml + '\n'}</pre>
-    <textarea
-      bind:this={textareaEl}
-      value={code}
-      oninput={handleInput}
-      onkeydown={handleKeydown}
-      onscroll={syncScroll}
-      spellcheck="false"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-    ></textarea>
+<div class="editor-pane" bind:this={paneEl}>
+  <div class="toolbar">
+    <span class="fn">schema.dbml</span>
+    <span class="stats">{lineCount} lines · {charCount} chars</span>
+    <div class="tbtns">
+      <button onclick={formatCode} title="Format">format</button>
+      <button onclick={copyCode} title="Copy">{copyLabel}</button>
+    </div>
   </div>
+  <div bind:this={editorDiv} class="editor-wrap"></div>
 </div>
 
 <style>
@@ -64,50 +92,73 @@
     flex-shrink: 0;
   }
 
-  .filename {
-    padding: 10px 16px;
-    font-size: 11px;
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: 10px;
     font-family: var(--mono);
-    color: var(--accent);
     background: var(--bg);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .fn {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 10px;
+  }
+
+  .stats {
+    color: var(--text-faint);
+    margin-right: auto;
+  }
+
+  .tbtns {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tbtns button {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 8px;
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+    transition: all 0.1s;
+  }
+
+  .tbtns button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255,255,255,0.03);
   }
 
   .editor-wrap {
     flex: 1;
     position: relative;
     overflow: hidden;
-  }
-
-  .highlight-layer, textarea {
-    position: absolute;
-    inset: 0;
-    padding: 16px;
+    --me-padding: 16px;
     font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: 10px;
+    line-height: 1.7;
     tab-size: 2;
     white-space: pre;
-    overflow: auto;
-    margin: 0;
-    border: none;
-    outline: none;
-    resize: none;
   }
 
-  .highlight-layer {
-    pointer-events: none;
-    color: var(--text);
-    z-index: 1;
-    background: transparent;
-  }
-
-  textarea {
-    color: transparent;
-    caret-color: var(--text);
-    background: transparent;
-    z-index: 2;
-    -webkit-text-fill-color: transparent;
+  .editor-wrap :global(textarea),
+  .editor-wrap :global(pre) {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    white-space: pre !important;
+    tab-size: 2;
   }
 
   :global(.tok-key) { color: var(--accent); font-weight: 600; }
@@ -115,4 +166,6 @@
   :global(.tok-type) { color: #60a5fa; }
   :global(.tok-str) { color: #34d399; }
   :global(.tok-com) { color: var(--text-faint); font-style: italic; }
+  :global(.tok-num) { color: #fbbf24; }
+  :global(.tok-bra) { color: #a78bfa; }
 </style>
