@@ -19,6 +19,11 @@
 
     <div class="spacer"></div>
 
+    <button onclick={() => onaction('undo')} title="Undo (Ctrl+Z)">↩</button>
+    <button onclick={() => onaction('redo')} title="Redo (Ctrl+Shift+Z)">↪</button>
+
+    <div class="spacer"></div>
+
     <button onclick={() => onaction('fit')} title="Fit all">⊞</button>
     <button onclick={() => onaction('svg')} title="Export SVG">↓s</button>
     <button onclick={() => onaction('png')} title="Export PNG">↓p</button>

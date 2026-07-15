@@ -27,6 +27,8 @@
   let worldEl: HTMLDivElement | undefined = $state();
   let canvasEl: HTMLDivElement | undefined = $state();
   let svgEl: SVGSVGElement | undefined = $state();
+  let svgW = $state(8000);
+  let svgH = $state(8000);
 
   // Debounced draw — max 1 per frame
   function schedDraw() {
@@ -61,9 +63,26 @@
     if (a === 'png') doExportPNG();
   }
 
+  function updateSvgSize() {
+    if (!worldEl) return;
+    const cards = worldEl.querySelectorAll<HTMLElement>('.tcard');
+    if (!cards.length) { svgW = 8000; svgH = 8000; return; }
+    let mx = 0, my = 0;
+    cards.forEach(c => {
+      const x = parseFloat(c.style.left) || 0;
+      const y = parseFloat(c.style.top) || 0;
+      mx = Math.max(mx, x + c.offsetWidth);
+      my = Math.max(my, y + c.offsetHeight);
+    });
+    const pad = 200;
+    svgW = Math.ceil(mx + pad);
+    svgH = Math.ceil(my + pad);
+  }
+
   // ==== LINE DRAWING ====
   function drawLines() {
     if (!svgEl || !worldEl) return;
+    updateSvgSize();
     const refs = data?.refs;
     if (!refs?.length) { svgEl.innerHTML = ''; return; }
 
@@ -327,7 +346,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="canvas" bind:this={canvasEl} onmousedown={canvasDown} onwheel={onWheel}>
     <div class="world" bind:this={worldEl}>
-      <svg class="lsvg" bind:this={svgEl}></svg>
+      <svg class="lsvg" bind:this={svgEl} style:width="{svgW}px" style:height="{svgH}px"></svg>
 
       {#each data.tables as table (table.name)}
         {@const tc = getTableClass(table.name)}
@@ -380,7 +399,7 @@
 .canvas{position:absolute;inset:0;overflow:hidden}
 .world{position:absolute;transform-origin:0 0;will-change:transform}
 
-.lsvg{position:absolute;top:0;left:0;width:8000px;height:8000px;pointer-events:none;z-index:1}
+.lsvg{position:absolute;top:0;left:0;pointer-events:none;z-index:1}
 :global(.lsvg path.rel){fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke:var(--accent);opacity:0.35}
 :global(.lsvg path.rel.hi){opacity:0.85;stroke-width:2.2}
 :global(.lsvg circle.rdot){fill:var(--accent);opacity:0.3}

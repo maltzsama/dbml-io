@@ -13,11 +13,57 @@
 
   let diagramRef: { executeAction: (a: string) => void } | undefined = $state();
 
+  let undoStack = $state<string[]>([]);
+  let redoStack = $state<string[]>([]);
+  let isUndoing = $state(false);
+  let prevCode = DEFAULT_DBML;
+
+  function undo() {
+    if (undoStack.length === 0) return;
+    isUndoing = true;
+    redoStack.push(dbmlCode);
+    dbmlCode = undoStack.pop()!;
+    prevCode = dbmlCode;
+    isUndoing = false;
+  }
+
+  function redo() {
+    if (redoStack.length === 0) return;
+    isUndoing = true;
+    dbmlCode = redoStack.pop()!;
+    undoStack.push(dbmlCode);
+    prevCode = dbmlCode;
+    isUndoing = false;
+  }
+
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   });
 
-  type Action = 'theme' | 'line' | 'fit' | 'svg' | 'png';
+  $effect(() => {
+    if (isUndoing) return;
+    const cur = dbmlCode;
+    if (cur === prevCode) return;
+    if (undoStack.length === 0 || undoStack[undoStack.length - 1] !== prevCode) {
+      if (undoStack.length > 100) undoStack.shift();
+      undoStack.push(prevCode);
+    }
+    redoStack = [];
+    prevCode = cur;
+  });
+
+  $effect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.target as HTMLElement)?.closest('.editor-wrap') && (e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        e.shiftKey ? redo() : undo();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
+  type Action = 'theme' | 'line' | 'fit' | 'svg' | 'png' | 'undo' | 'redo';
 
   function handleAction(action: Action) {
     if (action === 'theme') {
@@ -26,6 +72,10 @@
       lineMode = lineMode === 'ortho' ? 'bezier' : 'ortho';
     } else if (action === 'fit' || action === 'svg' || action === 'png') {
       diagramRef?.executeAction(action);
+    } else if (action === 'undo') {
+      undo();
+    } else if (action === 'redo') {
+      redo();
     }
   }
 </script>
