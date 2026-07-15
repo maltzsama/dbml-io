@@ -30,6 +30,20 @@
   let svgW = $state(8000);
   let svgH = $state(8000);
 
+  let searchQuery = $state('');
+  let searchInput: HTMLInputElement | undefined = $state();
+  let searchFocused = $state(false);
+
+  let visibleTables = $derived(
+    searchQuery
+      ? data.tables.filter(t => {
+          const q = searchQuery.toLowerCase();
+          if (t.name.toLowerCase().includes(q)) return true;
+          return t.fields.some(f => f.name.toLowerCase().includes(q) || f.type.toLowerCase().includes(q));
+        })
+      : data.tables
+  );
+
   // Debounced draw — max 1 per frame
   function schedDraw() {
     cancelAnimationFrame(rafId);
@@ -40,8 +54,8 @@
     if (worldEl) worldEl.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`;
   }
 
-  // Redraw only when data or lineMode changes
-  $effect(() => { data; lineMode; schedDraw(); });
+  // Redraw on data, lineMode, or search changes
+  $effect(() => { data; lineMode; searchQuery; schedDraw(); });
 
   onMount(() => {
     const onMove = (e: MouseEvent) => handleMove(e);
@@ -49,10 +63,23 @@
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
     window.addEventListener('resize', schedDraw);
+    function onDocKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInput?.focus();
+        searchInput?.select();
+      }
+      if (e.key === 'Escape' && searchFocused) {
+        searchQuery = '';
+        searchInput?.blur();
+      }
+    }
+    document.addEventListener('keydown', onDocKey);
     setTimeout(fitAll, 100);
     return () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('keydown', onDocKey);
       window.removeEventListener('resize', schedDraw);
     };
   });
@@ -348,7 +375,7 @@
     <div class="world" bind:this={worldEl}>
       <svg class="lsvg" bind:this={svgEl} style:width="{svgW}px" style:height="{svgH}px"></svg>
 
-      {#each data.tables as table (table.name)}
+      {#each visibleTables as table (table.name)}
         {@const tc = getTableClass(table.name)}
         <div class="tcard {tc}" data-t={table.name} style:left="{data.positions[table.name]?.x || 0}px" style:top="{data.positions[table.name]?.y || 0}px">
           <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -372,6 +399,21 @@
         </div>
       {/each}
     </div>
+  </div>
+
+  <div class="search-wrap" class:active={searchFocused || searchQuery}>
+    <input
+      bind:this={searchInput}
+      bind:value={searchQuery}
+      onfocus={() => searchFocused = true}
+      onblur={() => searchFocused = false}
+      type="text"
+      placeholder="Search tables & fields…"
+      class="sbar"
+    />
+    {#if searchQuery}
+      <button class="sclear" onclick={() => { searchQuery = ''; searchInput?.focus(); }}>×</button>
+    {/if}
   </div>
 
   <div class="tip" class:vis={tipVis} style:left="{tipX}px" style:top="{tipY}px">{@html tipHtml}</div>
@@ -469,4 +511,13 @@
 .zbar button{font-family:var(--mono);background:none;border:1px solid var(--border);color:var(--text-dim);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;display:grid;place-items:center}
 .zbar button:hover{background:rgba(255,255,255,0.06);color:var(--text)}
 .zlvl{min-width:40px;text-align:center}
+
+.search-wrap{position:absolute;top:16px;right:16px;z-index:90;display:flex;align-items:center;gap:4px;transition:opacity .15s}
+.search-wrap.active .sbar{opacity:1;width:180px}
+.search-wrap:not(.active) .sbar{opacity:0.3;width:100px}
+.search-wrap .sbar{background:var(--panel-bg);backdrop-filter:blur(14px);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-family:var(--mono);font-size:11px;color:var(--text);outline:none;transition:all .15s}
+.search-wrap .sbar:focus{opacity:1;width:220px;border-color:var(--accent);opacity:1}
+.search-wrap .sbar::placeholder{color:var(--text-faint);font-size:10.5px}
+.sclear{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:15px;padding:0 4px;line-height:1}
+.sclear:hover{color:var(--text)}
 </style>

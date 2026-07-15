@@ -725,49 +725,85 @@ function parseDBML(rawContent: string): ParsedDBML {
 }
 
 function computeLayout(tables: Table[], refs: Ref[]): Record<string, Position> {
-  const factNames = tables.filter(t => t.name.startsWith('fact_')).map(t => t.name);
-  const dimNames = tables.filter(t => !t.name.startsWith('fact_')).map(t => t.name);
-  const positions: Record<string, Position> = {};
+  const n = tables.length;
+  if (n === 0) return {};
+  if (n === 1) return { [tables[0].name]: { x: 900, y: 600 } };
 
-  if (factNames.length > 0) {
-    const cx = 900, cy = 600;
-    positions[factNames[0]] = { x: cx, y: cy };
+  const names = tables.map(t => t.name);
+  const pos: Record<string, { x: number; y: number }> = {};
+  const W = 2000, H = 1400;
 
-    const connDims: string[] = [], unconDims: string[] = [];
-    for (const d of dimNames) {
-      const conn = refs.some(r => (r.fromTable === d || r.toTable === d) && (r.fromTable === factNames[0] || r.toTable === factNames[0]));
-      (conn ? connDims : unconDims).push(d);
-    }
+  // Initialize to grid
+  const cols = Math.ceil(Math.sqrt(n));
+  tables.forEach((t, i) => {
+    pos[t.name] = { x: 80 + (i % cols) * 280, y: 80 + Math.floor(i / cols) * 280 };
+  });
 
-    connDims.forEach((d, i) => {
-      const a = (2 * Math.PI * i) / connDims.length - Math.PI / 2;
-      positions[d] = { x: cx + 620 * Math.cos(a), y: cy + 620 * Math.sin(a) };
-    });
+  const k = Math.sqrt((W * H) / n) * 0.7;
+  const iters = 150;
 
-    unconDims.forEach((d, i) => {
-      const pr = refs.find(r => r.fromTable === d || r.toTable === d);
-      if (pr) {
-        const pn = pr.fromTable === d ? pr.toTable : pr.fromTable;
-        const pp = positions[pn];
-        if (pp) {
-          const dx = pp.x - cx, dy = pp.y - cy, dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          positions[d] = { x: pp.x + (dx / dist) * 450, y: pp.y + (dy / dist) * 180 };
-          return;
-        }
+  for (let iter = 0; iter < iters; iter++) {
+    const f: Record<string, { x: number; y: number }> = {};
+    for (const t of tables) f[t.name] = { x: 0, y: 0 };
+
+    // Repulsion: all pairs
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = names[i], b = names[j];
+        let dx = pos[b].x - pos[a].x;
+        let dy = pos[b].y - pos[a].y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const fr = (k * k) / d;
+        dx /= d; dy /= d;
+        f[a].x -= fr * dx; f[a].y -= fr * dy;
+        f[b].x += fr * dx; f[b].y += fr * dy;
       }
-      positions[d] = { x: 100 + i * 440, y: cy + 700 };
-    });
-
-    for (let fi = 1; fi < factNames.length; fi++) {
-      positions[factNames[fi]] = { x: cx + fi * 480, y: cy };
     }
-  } else {
-    const cols = Math.ceil(Math.sqrt(tables.length));
-    tables.forEach((t, i) => {
-      positions[t.name] = { x: 80 + (i % cols) * 440, y: 80 + Math.floor(i / cols) * 500 };
-    });
+
+    // Attraction: connected
+    for (const r of refs) {
+      if (!pos[r.fromTable] || !pos[r.toTable]) continue;
+      let dx = pos[r.toTable].x - pos[r.fromTable].x;
+      let dy = pos[r.toTable].y - pos[r.fromTable].y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const fa = (d * d) / k;
+      dx /= d; dy /= d;
+      f[r.fromTable].x += fa * dx; f[r.fromTable].y += fa * dy;
+      f[r.toTable].x -= fa * dx; f[r.toTable].y -= fa * dy;
+    }
+
+    // Gravity to center
+    const cx = W / 2, cy = H / 2;
+    for (const t of tables) {
+      f[t.name].x += (cx - pos[t.name].x) * 0.005;
+      f[t.name].y += (cy - pos[t.name].y) * 0.005;
+    }
+
+    // Apply with temperature cooling
+    const temp = Math.max(0.001, 1 - iter / iters);
+    for (const t of tables) {
+      const m = Math.sqrt(f[t.name].x ** 2 + f[t.name].y ** 2) || 1;
+      const clamp = Math.min(m, 40);
+      pos[t.name].x += (f[t.name].x / m) * clamp * temp;
+      pos[t.name].y += (f[t.name].y / m) * clamp * temp;
+      pos[t.name].x = Math.max(10, Math.min(W - 10, pos[t.name].x));
+      pos[t.name].y = Math.max(10, Math.min(H - 10, pos[t.name].y));
+    }
   }
-  return positions;
+
+  // Translate to origin + padding
+  let minX = Infinity, minY = Infinity;
+  for (const t of tables) {
+    if (pos[t.name].x < minX) minX = pos[t.name].x;
+    if (pos[t.name].y < minY) minY = pos[t.name].y;
+  }
+  const pad = 60;
+  for (const t of tables) {
+    pos[t.name].x = pos[t.name].x - minX + pad;
+    pos[t.name].y = pos[t.name].y - minY + pad;
+  }
+
+  return pos as Record<string, Position>;
 }
 
 export function compileDBML(rawContent: string): CompiledDBML {
