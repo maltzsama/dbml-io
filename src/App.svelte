@@ -8,6 +8,8 @@
 
   let theme = $state('dark');
   let lineMode = $state('ortho');
+  let showEditor = $state(true);
+  let showLegend = $state(true);
   let dbmlCode = $state(DEFAULT_DBML);
   let parsedData: CompiledDBML = $derived(compileDBML(dbmlCode));
 
@@ -54,16 +56,26 @@
 
   $effect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.target as HTMLElement)?.closest('.editor-wrap') && (e.ctrlKey || e.metaKey) && e.key === 'z') {
+      const mod = e.ctrlKey || e.metaKey;
+      const t = e.target as HTMLElement;
+      if (t?.closest('.editor-wrap') && mod && e.key === 'z') {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
+      }
+      if (mod && e.key === 'b') {
+        e.preventDefault();
+        showEditor = !showEditor;
+      }
+      if (mod && e.key === 'l') {
+        e.preventDefault();
+        showLegend = !showLegend;
       }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   });
 
-  type Action = 'theme' | 'line' | 'fit' | 'svg' | 'png' | 'undo' | 'redo';
+  type Action = 'theme' | 'line' | 'fit' | 'svg' | 'png' | 'undo' | 'redo' | 'editor' | 'legend';
 
   function handleAction(action: Action) {
     if (action === 'theme') {
@@ -76,13 +88,19 @@
       undo();
     } else if (action === 'redo') {
       redo();
+    } else if (action === 'editor') {
+      showEditor = !showEditor;
+    } else if (action === 'legend') {
+      showLegend = !showLegend;
     }
   }
 </script>
 
 <main class="layout">
-  <Sidebar {theme} {lineMode} onaction={handleAction} />
-  <Editor bind:code={dbmlCode} {theme} />
+  <Sidebar {theme} {lineMode} {showEditor} onaction={handleAction} />
+  {#if showEditor}
+    <Editor bind:code={dbmlCode} {theme} />
+  {/if}
 
   <div class="diagram-area">
     {#if parsedData.error}
@@ -91,7 +109,7 @@
         <div class="error-msg">Parse error: {parsedData.error}</div>
       </div>
     {:else}
-      <Diagram data={parsedData} {theme} {lineMode} bind:this={diagramRef} />
+      <Diagram data={parsedData} {theme} {lineMode} {showLegend} bind:this={diagramRef} />
     {/if}
   </div>
 </main>

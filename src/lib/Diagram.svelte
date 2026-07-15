@@ -3,10 +3,11 @@
   import * as htmlToImage from 'html-to-image';
   import type { CompiledDBML, Table, TableField } from './parser';
 
-  let { data, theme, lineMode = 'ortho' }: {
+  let { data, theme, lineMode = 'ortho', showLegend = true }: {
     data: CompiledDBML;
     theme: string;
     lineMode?: string;
+    showLegend?: boolean;
   } = $props();
 
   // --- Plain JS state (NOT reactive — no re-renders on change) ---
@@ -418,6 +419,7 @@
 
   <div class="tip" class:vis={tipVis} style:left="{tipX}px" style:top="{tipY}px">{@html tipHtml}</div>
 
+  {#if showLegend}
   <div class="legend">
     <h4>Legend</h4>
     <div class="li"><div class="ls" style="background:var(--dim);"></div>Dimension</div>
@@ -427,6 +429,7 @@
     <div class="li"><div class="ls" style="background:var(--fk);border-radius:50%;"></div>FK</div>
     <div class="li"><div class="ls" style="background:var(--pkfk);border-radius:50%;"></div>PK+FK</div>
   </div>
+  {/if}
 
   <div class="zbar">
     <button onclick={doZoomOut}>−</button>
