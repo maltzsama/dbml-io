@@ -1,43 +1,127 @@
-# Svelte + Vite
+# dbml-io
 
-This template should help get you started developing with Svelte in Vite.
+> Visualize your database schemas instantly.
 
-## Recommended IDE Setup
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live-blue?logo=github)](https://maltzsama.github.io/dbml-io/)
+[![CI](https://github.com/maltzsama/dbml-io/actions/workflows/ci.yml/badge.svg)](https://github.com/maltzsama/dbml-io/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+A browser-based DBML visualizer and editor. Write or paste DBML code, see a live-updating entity-relationship diagram rendered as you type.
 
-## Need an official Svelte framework?
+<!-- Add a screenshot or GIF here -->
+<!-- ![dbml-io demo](./demo.png) -->
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+## Features
 
-## Technical considerations
+### Editor
 
-**Why use this over SvelteKit?**
+- **Syntax highlighting** for DBML keywords, types, strings, comments, and numbers
+- **Undo/Redo** with full history stack (up to 100 entries)
+- **Format** code (trim whitespace, collapse extra newlines)
+- **Copy to clipboard** with feedback
+- Live **line and character count**
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+### Diagram
 
-This template contains as little as possible to get started with Vite + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+- **Interactive canvas** with pan (click-drag) and zoom (scroll wheel, 0.12x - 4x)
+- **Drag table cards** to reposition them freely
+- **Two line styles**: Orthogonal (grid-routed with Dijkstra) or Bezier curves
+- **Star schema auto-detection**: Fact, Dimension, and Snowflake tables get distinct visual treatments
+- **Hover tooltips** showing field details (PK, FK, NN, UQ badges, defaults, notes)
+- **Line dragging** to nudge relationship paths
+- **Fit All** button to auto-fit the entire diagram in view
+- **Search** tables and fields by name or type
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
+### Export
 
-**Why include `.vscode/extensions.json`?**
+- **PNG** at 2x retina resolution
+- **SVG** with clean vector output
 
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
+### UI
 
-**Why enable `checkJs` in the JS template?**
+- **Dark and Light themes**
+- **Collapsible editor panel**
+- **Legend** panel explaining table types and key indicators
+- **Keyboard shortcuts** for all major actions
 
-It is likely that most cases of changing variable types in runtime are likely to be accidental, rather than deliberate. This provides advanced typechecking out of the box. Should you like to take advantage of the dynamically-typed nature of JavaScript, it is trivial to change the configuration.
+## Supported DBML Syntax
 
-**Why is HMR not preserving my local component state?**
+| Construct | Syntax | Details |
+|---|---|---|
+| **Tables** | `Table name { ... }` | With alias (`as`), `headercolor` setting |
+| **Fields** | `name type [settings]` | Full type support including parameterized (`varchar(255)`) |
+| **Field Settings** | `pk`, `not null`, `unique`, `increment`, `default:`, `note:`, `ref:`, `headercolor` | Inline references via `ref: > table.field` |
+| **Composite PKs** | `indexes { (f1, f2) [pk] }` | Parsed from indexes block |
+| **Enums** | `Enum name { ... }` | With per-value notes |
+| **References** | Inline, Short, Long | All 3 DBML reference forms supported |
+| **Relation Types** | `>` `<` `-` `<>` | One-to-many, many-to-one, one-to-one, many-to-many |
+| **Table Groups** | `TableGroup name { ... }` | With member list and note |
+| **Project Info** | `Project name { ... }` | Database type and metadata |
+| **Table Groups** | `TableGroup name { ... }` | Group members visually |
+| **Composite Refs** | `table.f1(p1) > table.f2(p2)` | Parenthesized field references |
+| **Comments** | `//` and `/* */` | Single-line and multi-line |
+| **Strings** | `'...'` and `'''...'''` | Single-quoted and triple-quoted |
+| **Backtick IDs** | `` `reserved_name` `` | For reserved-word column names |
+| **Aliases** | `Table users as u` | Resolved across all references |
 
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/sveltejs/svelte-hmr/tree/master/packages/svelte-hmr#preservation-of-local-state).
+## Keyboard Shortcuts
 
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Z` / `Cmd+Z` | Undo |
+| `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
+| `Ctrl+B` / `Cmd+B` | Toggle editor panel |
+| `Ctrl+L` / `Cmd+L` | Toggle legend |
+| `Ctrl+F` / `Cmd+F` | Focus diagram search |
+| `Escape` | Clear search |
+| `+` / `-` | Zoom in / out |
+| Scroll wheel | Zoom to cursor |
 
-```js
-// store.js
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+## Getting Started
+
+```bash
+# Clone
+git clone https://github.com/maltzsama/dbml-io.git
+cd dbml-io
+
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
 ```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+## Live Demo
+
+**[https://maltzsama.github.io/dbml-io/](https://maltzsama.github.io/dbml-io/)**
+
+## Tech Stack
+
+- [Svelte 5](https://svelte.dev/) (runes: `$state`, `$derived`, `$effect`)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Vite 7](https://vite.dev/)
+- Custom tokenizer-based DBML parser (zero runtime dependencies)
+- [html-to-image](https://github.com/bubkoo/html-to-image) for export
+
+## Development
+
+```bash
+npm run dev          # Dev server with HMR
+npm run build        # Production build to dist/
+npm run preview      # Preview production build
+npm run typecheck    # Type-check with svelte-check
+npm test             # Run tests once
+npm run test:watch   # Run tests in watch mode
+```
+
+### CI/CD
+
+- **CI** (`.github/workflows/ci.yml`): Type-check, test, and build on every push/PR to `main` and `develop`
+- **Release** (`.github/workflows/release.yml`): Semantic versioning on push to `main`
+- **Deploy** (`.github/workflows/deploy.yml`): Auto-deploy to GitHub Pages on new releases
+
+## License
+
+[Apache License 2.0](LICENSE)

@@ -12,7 +12,10 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "semantic-release": "^25.0.7",
     "svelte": "^5.45.2",
     "svelte-check": "^4.7.2",
     "typescript": "^7.0.2",
