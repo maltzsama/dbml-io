@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/maltzsama/dbml-io/compare/v1.0.2...v1.0.3) (2026-07-16)
+
+
+### Bug Fixes
+
+* improve text selection alignment in editor ([47ddb8e](https://github.com/maltzsama/dbml-io/commit/47ddb8e110c6d39e0ad73ec25b1953870deae582))
+
 ## [1.0.2](https://github.com/maltzsama/dbml-io/compare/v1.0.1...v1.0.2) (2026-07-16)
 
 
