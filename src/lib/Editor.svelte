@@ -289,10 +289,41 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    box-sizing: border-box;
   }
 
   /* CodeMirror mounts its own DOM inside .editor-wrap. Give it full size. */
   :global(.editor-wrap .cm-editor) {
     height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 16px;
+  }
+
+  .editor-wrap :global(textarea) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--accent);
+    resize: none;
+    border: none;
+    outline: none;
+    z-index: 2;
+  }
+
+  .editor-wrap :global(pre) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
   }
 </style>
