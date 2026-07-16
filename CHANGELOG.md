@@ -1,3 +1,12 @@
+## [1.0.4](https://github.com/maltzsama/dbml-io/compare/v1.0.3...v1.0.4) (2026-07-16)
+
+
+### Bug Fixes
+
+* change deploy trigger from release to push (GITHUB_TOKEN limitation) ([004f5eb](https://github.com/maltzsama/dbml-io/commit/004f5ebaa001597733724f1bd93890b3b56ef3b6))
+* improve text selection alignment in editor ([aa13384](https://github.com/maltzsama/dbml-io/commit/aa13384a796a5b29505e51c583339b2256a553b1))
+* remove paths-ignore from deploy workflow to ensure reliable triggering ([a3f8ec8](https://github.com/maltzsama/dbml-io/commit/a3f8ec8da87edc4c8f32ba49fb6651e320493aef))
+
 ## [1.0.3](https://github.com/maltzsama/dbml-io/compare/v1.0.2...v1.0.3) (2026-07-16)
 
 
