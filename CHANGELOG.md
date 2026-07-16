@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/maltzsama/dbml-io/compare/v1.0.1...v1.0.2) (2026-07-16)
+
+
+### Bug Fixes
+
+* remove paths-ignore from deploy workflow to ensure reliable triggering ([c83b053](https://github.com/maltzsama/dbml-io/commit/c83b053229156cfae92fa73e418bf8950220929a))
+
 ## [1.0.1](https://github.com/maltzsama/dbml-io/compare/v1.0.0...v1.0.1) (2026-07-15)
 
 
