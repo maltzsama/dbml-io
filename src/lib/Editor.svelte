@@ -150,6 +150,7 @@
     line-height: 1.7;
     tab-size: 2;
     white-space: pre;
+    box-sizing: border-box;
   }
 
   .editor-wrap :global(textarea),
@@ -159,6 +160,36 @@
     line-height: inherit;
     white-space: pre !important;
     tab-size: 2;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 16px;
+  }
+
+  .editor-wrap :global(textarea) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--accent);
+    resize: none;
+    border: none;
+    outline: none;
+    z-index: 2;
+  }
+
+  .editor-wrap :global(pre) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
   }
 
   :global(.tok-key) { color: var(--accent); font-weight: 600; }
