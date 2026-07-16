@@ -1,19 +1,26 @@
 <script lang="ts">
   import { compileDBML, type CompiledDBML } from './lib/parser';
   import { DEFAULT_DBML } from './lib/defaults';
+  import { loadSession, saveSession } from './lib/storage';
   import Sidebar from './lib/Sidebar.svelte';
   import Editor from './lib/Editor.svelte';
   import Diagram from './lib/Diagram.svelte';
   import './app.css';
 
-  let theme = $state('dark');
-  let lineMode = $state('ortho');
-  let showEditor = $state(true);
-  let showLegend = $state(true);
-  let dbmlCode = $state(DEFAULT_DBML);
+  const initial = loadSession(DEFAULT_DBML);
+  let theme = $state(initial.theme);
+  let lineMode = $state(initial.lineMode);
+  let showEditor = $state(initial.showEditor);
+  let showLegend = $state(initial.showLegend);
+  let dbmlCode = $state(initial.dbmlCode);
   let parsedData: CompiledDBML = $derived(compileDBML(dbmlCode));
 
   let diagramRef: { executeAction: (a: string) => void } | undefined = $state();
+
+  $effect(() => {
+    const state = { theme, lineMode, showEditor, showLegend, dbmlCode };
+    saveSession(state);
+  });
 
   let undoStack = $state<string[]>([]);
   let redoStack = $state<string[]>([]);
