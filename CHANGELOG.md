@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/maltzsama/dbml-io/compare/v1.0.4...v1.1.0) (2026-07-16)
+
+
+### Features
+
+* persist user session to localStorage ([3606c11](https://github.com/maltzsama/dbml-io/commit/3606c11a0777af7be661d7fb139b22d17ef836b7))
+
 ## [1.0.4](https://github.com/maltzsama/dbml-io/compare/v1.0.3...v1.0.4) (2026-07-16)
 
 
